@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}My History{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card p-4">
+            <h4 class="fw-bold mb-4"><i class="fas fa-history" style="color:#667eea;"></i> My Submission History</h4>
+            {% if submissions %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Date</th>
+                                <th>Preview</th>
+                                <th>Verdict</th>
+                                <th>Confidence</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sub in submissions %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>{{ sub.submitted_at|date:"d M Y, H:i" }}</td>
+                                <td>{{ sub.news_text|truncatechars:80 }}</td>
+                                <td>
+                                    {% if sub.prediction == 'REAL' %}
+                                        <span class="badge bg-success">✅ REAL</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">❌ FAKE</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ sub.confidence_score }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-inbox fa-4x text-muted"></i>
+                    <p class="mt-3 text-muted">No submissions yet. <a href="{% url 'detector:submit' %}">Analyze your first article!</a></p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
