@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-d*c4$%faym@$6bugjup%+$o0f(o21h7jrc8kuymp@_a7i79*s7
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -79,12 +79,8 @@ WSGI_APPLICATION = 'truthguard.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'truthguard_db',
-        'USER': 'root',
-        'PASSWORD': 'Money@maker06',
-        'HOST': 'localhost',
-        'PORT': '3306',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
