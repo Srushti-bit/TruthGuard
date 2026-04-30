@@ -10,3 +10,4 @@ ml_model/*.csv
 ml_model/*.pth 
 *.sqlite3 
 .env 
+.env 
