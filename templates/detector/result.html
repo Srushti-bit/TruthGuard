@@ -1,58 +1,89 @@
 {% extends 'base.html' %}
-{% block title %}Analysis Result{% endblock %}
+{% load static %}
+
+{% block title %}Result — TruthGuard{% endblock %}
+
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card p-4 mb-4 text-center">
-            {% if submission.prediction == 'REAL' %}
-                <div style="color: #2ed573;">
-                    <i class="fas fa-check-circle fa-5x"></i>
-                    <h2 class="mt-3 fw-bold">LIKELY REAL</h2>
-                </div>
-                <p class="text-muted">Our AI classifies this news as credible.</p>
-            {% else %}
-                <div style="color: #ff4757;">
-                    <i class="fas fa-times-circle fa-5x"></i>
-                    <h2 class="mt-3 fw-bold">LIKELY FAKE</h2>
-                </div>
-                <p class="text-muted">Our AI flags this news as potentially fake.</p>
-            {% endif %}
-        </div>
+<div class="tg-main tg-fadein">
 
-        <div class="card p-4 mb-4">
-            <h5 class="fw-bold mb-3"><i class="fas fa-chart-bar"></i> Confidence Breakdown</h5>
-            <p class="mb-1 fw-semibold">Real News Probability</p>
-            <div class="progress mb-3" style="height: 25px;">
-                <div class="progress-bar bg-success" style="width: {{ result.real_prob }}%;">
-                    {{ result.real_prob }}%
-                </div>
-            </div>
-            <p class="mb-1 fw-semibold">Fake News Probability</p>
-            <div class="progress mb-3" style="height: 25px;">
-                <div class="progress-bar bg-danger" style="width: {{ result.fake_prob }}%;">
-                    {{ result.fake_prob }}%
-                </div>
-            </div>
-            <div class="alert alert-warning mt-2">
-                <i class="fas fa-info-circle"></i>
-                <strong>Disclaimer:</strong> This is an AI prediction, not a definitive fact-check.
-                Always verify news from trusted sources.
-            </div>
-        </div>
+  <div class="section-header">
+    <h1>Analysis result</h1>
+    <p>Here's what the model found.</p>
+  </div>
 
-        <div class="card p-4 mb-4">
-            <h5 class="fw-bold mb-3"><i class="fas fa-newspaper"></i> Analyzed Text (Preview)</h5>
-            <p class="text-muted">{{ news_preview }}{% if submission.news_text|length > 500 %}...{% endif %}</p>
-        </div>
-
-        <div class="d-flex gap-3">
-            <a href="{% url 'detector:submit' %}" class="btn btn-primary flex-fill">
-                <i class="fas fa-redo"></i> Analyze Another
-            </a>
-            <a href="{% url 'detector:history' %}" class="btn btn-outline-secondary flex-fill">
-                <i class="fas fa-history"></i> View History
-            </a>
-        </div>
+  <div class="tg-card">
+    <div class="result-header">
+      <div class="verdict-badge verdict-{{ prediction|upper }}">
+        {{ prediction|upper }}
+      </div>
+      <div class="result-meta">
+        {% if prediction == 'FAKE' or prediction == 'fake' %}
+          <h2>Likely Fake News</h2>
+          <p>High probability of misinformation detected in this content.</p>
+        {% elif prediction == 'REAL' or prediction == 'real' %}
+          <h2>Likely Real News</h2>
+          <p>Low misinformation signals. Content appears credible.</p>
+        {% else %}
+          <h2>Uncertain</h2>
+          <p>Mixed signals detected. Manual review recommended.</p>
+        {% endif %}
+      </div>
     </div>
+
+    {% if confidence %}
+    <div class="conf-row">
+      <label>
+        <span>Real probability</span>
+        <span>{{ confidence.real }}%</span>
+      </label>
+      <div class="conf-bar">
+        <div class="conf-fill-real" style="width:{{ confidence.real }}%;"></div>
+      </div>
+    </div>
+    <div class="conf-row">
+      <label>
+        <span>Fake probability</span>
+        <span>{{ confidence.fake }}%</span>
+      </label>
+      <div class="conf-bar">
+        <div class="conf-fill-fake" style="width:{{ confidence.fake }}%;"></div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if analyzed_text %}
+    <div style="margin-top:1rem;padding-top:1rem;border-top:0.5px solid var(--tg-border);">
+      <div class="tg-label">Analyzed text</div>
+      <p style="font-size:13px;color:var(--tg-muted);line-height:1.7;margin-top:6px;max-height:120px;overflow:hidden;text-overflow:ellipsis;">
+        {{ analyzed_text|truncatechars:400 }}
+      </p>
+    </div>
+    {% endif %}
+
+    <div class="nlp-tags">
+      {% if prediction == 'FAKE' or prediction == 'fake' %}
+        <span class="nlp-tag" style="color:var(--tg-red);border-color:rgba(255,68,85,0.2);background:rgba(255,68,85,0.06);">sensational-language</span>
+        <span class="nlp-tag" style="color:var(--tg-red);border-color:rgba(255,68,85,0.2);background:rgba(255,68,85,0.06);">emotional-trigger</span>
+        <span class="nlp-tag" style="color:var(--tg-red);border-color:rgba(255,68,85,0.2);background:rgba(255,68,85,0.06);">unverified-claim</span>
+        <span class="nlp-tag">clickbait-pattern</span>
+        <span class="nlp-tag">missing-sources</span>
+      {% else %}
+        <span class="nlp-tag" style="color:var(--tg-green);border-color:rgba(0,220,130,0.2);background:rgba(0,220,130,0.06);">neutral-tone</span>
+        <span class="nlp-tag" style="color:var(--tg-green);border-color:rgba(0,220,130,0.2);background:rgba(0,220,130,0.06);">factual-language</span>
+        <span class="nlp-tag" style="color:var(--tg-green);border-color:rgba(0,220,130,0.2);background:rgba(0,220,130,0.06);">consistent-claims</span>
+        <span class="nlp-tag">cited-sources</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;margin-top:0.5rem;">
+    <a href="{% url 'detector:submit' %}" class="tg-btn-primary" style="flex:1;margin-top:0;">
+      Analyze another article
+    </a>
+    <a href="{% url 'detector:history' %}" class="tg-btn-ghost" style="flex:1;margin-top:0;">
+      View history
+    </a>
+  </div>
+
 </div>
 {% endblock %}

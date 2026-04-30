@@ -1,68 +1,104 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, Dataset
 import pandas as pd
-import numpy as np
-import re
-import joblib
-import os
-import nltk
-from nltk.corpus import stopwords
-from nltk.stem import PorterStemmer
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+from transformers import BertTokenizer, BertModel
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import os
+import warnings
 
-nltk.download('stopwords')
+warnings.filterwarnings('ignore')
 
-stop_words = set(stopwords.words('english'))
-stemmer = PorterStemmer()
+# --- LIGHTWEIGHT DATASET ---
+class FakeNewsDataset(Dataset):
+    def __init__(self, texts, labels):
+        self.texts = texts
+        self.labels = labels
+        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    
+    def __len__(self):
+        return len(self.texts)
+    
+    def __getitem__(self, idx):
+        # Using max_length=64 saves your CPU from crashing
+        encoding = self.tokenizer(
+            str(self.texts[idx]),
+            max_length=64, 
+            truncation=True,
+            padding='max_length',
+            return_tensors='pt'
+        )
+        return {
+            'input_ids': encoding['input_ids'].squeeze(0),
+            'attention_mask': encoding['attention_mask'].squeeze(0),
+            'label': torch.tensor(self.labels[idx], dtype=torch.long)
+        }
 
-def preprocess_text(text):
-    text = text.lower()
-    text = re.sub(r'http\S+|www\S+', '', text)
-    text = re.sub(r'[^a-zA-Z\s]', '', text)
-    words = text.split()
-    words = [stemmer.stem(w) for w in words if w not in stop_words and len(w) > 2]
-    return ' '.join(words)
+# --- MODEL ARCHITECTURE ---
+class HybridTruthGuard(nn.Module):
+    def __init__(self):
+        super(HybridTruthGuard, self).__init__()
+        self.bert = BertModel.from_pretrained('bert-base-uncased')
+        self.fusion = nn.Linear(768 + 64, 128) # BERT + Placeholder GCN
+        self.classifier = nn.Linear(128, 2)
+        self.dropout = nn.Dropout(0.3)
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    def forward(self, ids, mask):
+        outputs = self.bert(ids, mask)
+        bert_feats = outputs.last_hidden_state[:, 0, :]
+        gcn_placeholder = torch.zeros(bert_feats.shape[0], 64).to(bert_feats.device)
+        combined = torch.cat([bert_feats, gcn_placeholder], dim=-1)
+        return self.classifier(self.dropout(torch.relu(self.fusion(combined))))
 
-print("Loading dataset...")
-fake_df = pd.read_csv(os.path.join(BASE_DIR, 'Fake.csv'))
-true_df = pd.read_csv(os.path.join(BASE_DIR, 'True.csv'))
+# --- MAIN EXECUTION ---
+def train_safely():
+    device = 'cpu' # Forcing CPU to stay stable
+    print(f"🚀 Starting Survival Training on {device}...")
+    
+    df = pd.read_csv('master_dataset_2026.csv')
+    
+    # --- CRITICAL: Training on 1,000 rows so your laptop stays cool ---
+    df = df.sample(1000, random_state=42) 
+    
+    X_train, X_test, y_train, y_test = train_test_split(
+        df['text'].tolist(), df['label'].tolist(), test_size=0.2, stratify=df['label']
+    )
+    
+    # Batch size 4 is very easy on RAM
+    train_loader = DataLoader(FakeNewsDataset(X_train, y_train), batch_size=4, shuffle=True)
+    test_loader = DataLoader(FakeNewsDataset(X_test, y_test), batch_size=4)
 
-fake_df['label'] = 0
-true_df['label'] = 1
+    model = HybridTruthGuard().to(device)
+    optimizer = optim.AdamW(model.parameters(), lr=2e-5)
+    criterion = nn.CrossEntropyLoss()
 
-df = pd.concat([fake_df, true_df], ignore_index=True)
-df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+    print("\n[Training Epoch 1/1] This will take ~5 mins...")
+    model.train()
+    for batch in train_loader:
+        ids, mask, lbls = batch['input_ids'].to(device), batch['attention_mask'].to(device), batch['label'].to(device)
+        outputs = model(ids, mask)
+        loss = criterion(outputs, lbls)
+        optimizer.zero_grad(); loss.backward(); optimizer.step()
 
-print(f"Dataset size: {len(df)} articles")
-print(f"Fake: {len(fake_df)} | Real: {len(true_df)}")
+    # --- EVALUATION ---
+    model.eval()
+    preds, actual = [], []
+    with torch.no_grad():
+        for batch in test_loader:
+            outputs = model(batch['input_ids'].to(device), batch['attention_mask'].to(device))
+            preds.extend(torch.argmax(outputs, dim=1).cpu().numpy())
+            actual.extend(batch['label'].cpu().numpy())
 
-df['content'] = df['title'] + ' ' + df['text']
+    print("\n" + "="*35)
+    print(f"✅ SUCCESS! Results for TruthGuard:")
+    print(f"Accuracy:  {accuracy_score(actual, preds):.4f}")
+    print(f"F1-Score:  {f1_score(actual, preds, average='weighted'):.4f}")
+    print("="*35)
+    
+    torch.save(model.state_dict(), 'hybrid_model.pth')
+    print("✓ Model saved safely as hybrid_model.pth")
 
-print("Preprocessing text...")
-df['processed'] = df['content'].apply(preprocess_text)
-
-X_train, X_test, y_train, y_test = train_test_split(
-    df['processed'], df['label'], test_size=0.2, random_state=42
-)
-
-print("Vectorizing...")
-vectorizer = TfidfVectorizer(max_features=10000, ngram_range=(1,2))
-X_train_vec = vectorizer.fit_transform(X_train)
-X_test_vec = vectorizer.transform(X_test)
-
-print("Training model...")
-model = LogisticRegression(max_iter=1000)
-model.fit(X_train_vec, y_train)
-
-y_pred = model.predict(X_test_vec)
-accuracy = accuracy_score(y_test, y_pred)
-print(f"\n✅ Model Accuracy: {accuracy * 100:.2f}%")
-print(classification_report(y_test, y_pred, target_names=['Fake', 'Real']))
-
-joblib.dump(model, os.path.join(BASE_DIR, 'model.pkl'))
-joblib.dump(vectorizer, os.path.join(BASE_DIR, 'vectorizer.pkl'))
-print("\n✅ Model saved to ml_model/model.pkl")
-print("✅ Vectorizer saved to ml_model/vectorizer.pkl")
+if __name__ == '__main__':
+    train_safely()

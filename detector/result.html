@@ -1,0 +1,67 @@
+{% extends 'detector/base.html' %}
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card shadow-lg mb-4 border-0">
+                <div class="card-body text-center {% if submission.prediction == 'REAL' %}bg-success{% else %}bg-danger{% endif %} text-white rounded shadow">
+                    <h1 class="display-4 font-weight-bold">Prediction: {{ submission.prediction }}</h1>
+                    <p class="lead">TruthGuard Hybrid Analysis Result</p>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-dark text-white font-weight-bold">
+                            🔍 AI Reliability Metrics
+                        </div>
+                        <div class="card-body">
+                            <h5 class="card-title">Confidence Score: <span class="text-primary">{{ submission.confidence_score|stringformat:".2f" }}%</span></h5>
+                            <hr>
+                            <div class="mb-3">
+                                <h6>Uncertainty (MC Dropout):</h6>
+                                <div class="progress" style="height: 25px;">
+                                    <div class="progress-bar bg-warning text-dark" role="progressbar" 
+                                         style="width: {{ result.uncertainty|default:5 }}%;" 
+                                         aria-valuenow="{{ result.uncertainty }}" aria-valuemin="0" aria-valuemax="100">
+                                        {{ result.uncertainty|default:"0.00" }}
+                                    </div>
+                                </div>
+                                <small class="text-muted">A higher score means the AI is less sure about the spread patterns.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-dark text-white font-weight-bold">
+                            🕸️ Hybrid Analysis Details
+                        </div>
+                        <div class="card-body">
+                            <p><strong>Propagation Analysis:</strong> <span class="badge badge-info">{{ submission.shares_analyzed }} Shares</span> analyzed via GCN.</p>
+                            <p><strong>BERT Semantic Score:</strong> {{ result.real_prob|stringformat:".2f" }}%</p>
+                            <p><strong>GCN Spread Score:</strong> {{ result.fake_prob|stringformat:".2f" }}%</p>
+                            <hr>
+                            <p class="small text-muted italic">This prediction was generated using Late Fusion of BERT and Time-Aware Graph Convolutional Networks.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-4 shadow-sm">
+                <div class="card-body bg-light">
+                    <h6>Analyzed Content Preview:</h6>
+                    <p class="text-muted">{{ news_preview }}...</p>
+                </div>
+            </div>
+
+            <div class="text-center mt-4 mb-5">
+                <a href="{% url 'detector:submit' %}" class="btn btn-primary px-5 shadow">Analyze Another</a>
+                <a href="{% url 'detector:history' %}" class="btn btn-outline-dark px-4 shadow ml-2">History</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

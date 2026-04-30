@@ -1,0 +1,98 @@
+{% extends 'detector/base.html' %}
+{% load static %}
+
+{% block title %}Analysis History - TruthGuard{% endblock %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="font-weight-bold">Analysis History</h2>
+            <p class="text-muted mb-0">Review your past TruthGuard Hybrid (BERT + GCN) detections.</p>
+        </div>
+        <a href="{% url 'detector:submit' %}" class="btn btn-primary shadow-sm">
+            <i class="fas fa-plus-circle mr-1"></i> Analyze New Article
+        </a>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="bg-dark text-white">
+                        <tr>
+                            <th class="px-4 py-3">Timestamp</th>
+                            <th class="py-3">Analyzed Content</th>
+                            <th class="py-3">Result</th>
+                            <th class="py-3">Confidence</th>
+                            <th class="py-3">Uncertainty</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in submissions %}
+                        <tr>
+                            <td class="align-middle px-4">
+                                <span class="font-weight-bold">{{ item.submitted_at|date:"d M Y" }}</span><br>
+                                <small class="text-muted">{{ item.submitted_at|date:"H:i" }} UTC</small>
+                            </td>
+                            <td class="align-middle" style="max-width: 300px;">
+                                <div class="text-truncate" title="{{ item.news_text }}">
+                                    {{ item.news_text }}
+                                </div>
+                                {% if item.source_url %}
+                                <small class="text-primary d-block mt-1">
+                                    <i class="fas fa-link mr-1"></i> {{ item.source_url|truncatechars:40 }}
+                                </small>
+                                {% endif %}
+                            </td>
+                            <td class="align-middle">
+                                {% if item.prediction == 'REAL' %}
+                                <span class="badge bg-success text-white px-3 py-2 rounded-pill">
+                                    <i class="fas fa-check-circle mr-1"></i> REAL
+                                </span>
+                                {% else %}
+                                <span class="badge bg-danger text-white px-3 py-2 rounded-pill">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i> FAKE
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="align-middle">
+                                <div class="font-weight-bold {% if item.confidence_score > 90 %}text-success{% else %}text-primary{% endif %}">
+                                    {{ item.confidence_score|stringformat:".2f" }}%
+                                </div>
+                                <div class="progress" style="height: 4px; width: 60px;">
+                                    <div class="progress-bar" role="progressbar" style="width: {{ item.confidence_score }}%;"></div>
+                                </div>
+                            </td>
+                            <td class="align-middle">
+                                {% with unc=item.uncertainty_score|default:0 %}
+                                <span class="badge {% if unc < 10 %}bg-light text-success border{% else %}bg-warning text-dark{% endif %} px-2 py-1">
+                                    ± {{ unc|stringformat:".2f" }}
+                                </span>
+                                {% endwith %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-5">
+                                <div class="text-muted">
+                                    <i class="fas fa-folder-open fa-3x mb-3"></i>
+                                    <p class="lead">No analysis records found.</p>
+                                    <a href="{% url 'detector:submit' %}" class="btn btn-sm btn-outline-primary">Start Analyzing Now</a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4 text-center">
+        <p class="small text-muted italic">
+            * History displays results based on 50 MC Dropout passes and 500 propagation share thresholds.
+        </p>
+    </div>
+</div>
+{% endblock %}

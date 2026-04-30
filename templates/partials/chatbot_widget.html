@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TruthGuard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: #0d1117;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      color: rgba(255,255,255,0.15);
+      font-size: 14px;
+    }
+
+    /* ── FAB toggle ── */
+    .guard-btn {
+      position: fixed; bottom: 28px; right: 28px; z-index: 999;
+      width: 54px; height: 54px; border-radius: 50%; border: none; cursor: pointer;
+      background: #00c853;
+      box-shadow: 0 4px 24px rgba(0,200,83,0.4);
+      display: flex; align-items: center; justify-content: center;
+      transition: transform .2s, filter .2s;
+    }
+    .guard-btn:hover { transform: scale(1.08); filter: brightness(1.1); }
+    .guard-btn svg { width: 24px; height: 24px; fill: #060b0f; }
+
+    /* ── Chat window ── */
+    .guard-window {
+      position: fixed; bottom: 94px; right: 28px; z-index: 998;
+      width: 340px; max-height: 560px;
+      background: rgba(15,20,25,0.97);
+      border: 1px solid rgba(0,230,118,0.2);
+      border-radius: 20px;
+      display: flex; flex-direction: column;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.55);
+      transform: translateY(16px) scale(0.97); opacity: 0; pointer-events: none;
+      transition: opacity .2s ease, transform .2s ease;
+    }
+    .guard-window.open {
+      opacity: 1; transform: translateY(0) scale(1); pointer-events: all;
+    }
+
+    /* ── Header ── */
+    .guard-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 18px;
+      border-bottom: 1px solid rgba(0,230,118,0.12);
+      flex-shrink: 0;
+    }
+    .guard-avatar {
+      width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+      background: #00c853;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 12px rgba(0,200,83,0.35);
+    }
+    .guard-avatar svg { width: 18px; height: 18px; fill: #060b0f; }
+    .guard-name { font-weight: 700; font-size: 0.95rem; color: #e8f0e9; }
+    .guard-status { font-size: 0.72rem; color: rgba(0,230,118,0.7); margin-top: 1px; }
+    .guard-close {
+      margin-left: auto; background: none; border: none; cursor: pointer;
+      color: rgba(200,220,205,0.45); font-size: 1.1rem; line-height: 1;
+      padding: 4px; border-radius: 6px; transition: color .15s;
+    }
+    .guard-close:hover { color: #e8f0e9; }
+
+    /* ── Messages ── */
+    .guard-messages {
+      flex: 1; overflow-y: auto; padding: 16px 18px;
+      display: flex; flex-direction: column; gap: 12px;
+      scrollbar-width: thin; scrollbar-color: rgba(0,230,118,0.2) transparent;
+    }
+    .guard-messages::-webkit-scrollbar { width: 4px; }
+    .guard-messages::-webkit-scrollbar-track { background: transparent; }
+    .guard-messages::-webkit-scrollbar-thumb { background: rgba(0,230,118,0.2); border-radius: 4px; }
+
+    .msg { display: flex; flex-direction: column; max-width: 85%; }
+    .msg.bot  { align-self: flex-start; }
+    .msg.user { align-self: flex-end; align-items: flex-end; }
+
+    .msg-bubble {
+      padding: 10px 14px; border-radius: 14px;
+      font-size: 0.85rem; line-height: 1.55;
+    }
+    .msg.bot .msg-bubble {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(0,230,118,0.12);
+      color: #e8f0e9;
+      border-bottom-left-radius: 4px;
+    }
+    .msg.user .msg-bubble {
+      background: #00c853;
+      color: #060b0f; font-weight: 500;
+      border-bottom-right-radius: 4px;
+    }
+
+    /* ── Typing indicator ── */
+    .typing-dots { display: flex; gap: 5px; padding: 10px 14px; align-items: center; }
+    .typing-dots span {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: rgba(0,230,118,0.6); animation: bounce 1.2s infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: .2s; }
+    .typing-dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce {
+      0%,60%,100% { transform: translateY(0); }
+      30% { transform: translateY(-6px); }
+    }
+
+    /* ── Suggested chips ── */
+    .chips-zone {
+      padding: 10px 14px 8px;
+      border-top: 1px solid rgba(0,230,118,0.10);
+      flex-shrink: 0;
+    }
+    .chips-label {
+      font-size: 10px; font-weight: 600; letter-spacing: .07em;
+      color: rgba(0,230,118,0.5); margin-bottom: 7px;
+      font-family: inherit;
+    }
+    .chips-row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    /* To add more chips: duplicate a .qq-chip button below.
+       They wrap automatically into new rows. */
+    .qq-chip {
+      background: rgba(0,230,118,0.06);
+      border: 1px solid rgba(0,230,118,0.2);
+      border-radius: 20px; padding: 5px 11px;
+      font-size: 11.5px; color: rgba(0,230,118,0.85);
+      cursor: pointer; white-space: nowrap;
+      font-family: inherit;
+      transition: background .12s, color .12s, border-color .12s;
+    }
+    .qq-chip:hover { background: rgba(0,230,118,0.14); color: #00e676; border-color: rgba(0,230,118,0.4); }
+    .qq-chip:active { transform: scale(0.97); }
+    .qq-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Input row ── */
+    .guard-input-row {
+      display: flex; gap: 8px; padding: 10px 14px 14px;
+      border-top: 1px solid rgba(0,230,118,0.12);
+      flex-shrink: 0;
+    }
+    .guard-input {
+      flex: 1; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
+      color: #e8f0e9; font-family: inherit; font-size: 0.88rem;
+      padding: 9px 13px; outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .guard-input:focus {
+      border-color: rgba(0,230,118,0.45);
+      box-shadow: 0 0 0 3px rgba(0,200,83,0.1);
+    }
+    .guard-input::placeholder { color: rgba(200,220,205,0.35); }
+    .guard-input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .guard-send {
+      width: 38px; height: 38px; border-radius: 10px; border: none; cursor: pointer;
+      background: #00c853;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      transition: filter .15s, transform .1s;
+    }
+    .guard-send:hover { filter: brightness(1.1); transform: scale(1.05); }
+    .guard-send:active { transform: scale(0.97); }
+    .guard-send:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .guard-send svg { width: 16px; height: 16px; fill: #060b0f; }
+  </style>
+</head>
+<body>
+
+  TruthGuard — click the shield button to open Guard
+
+  <!-- ── FAB ── -->
+  <button class="guard-btn" id="guardToggle" title="Chat with Guard">
+    <svg viewBox="0 0 24 24"><path d="M12 2L4 5v6c0 5.25 3.5 10.15 8 11.35C16.5 21.15 20 16.25 20 11V5l-8-3z"/></svg>
+  </button>
+
+  <!-- ── Chat window ── -->
+  <div class="guard-window" id="guardWindow">
+
+    <div class="guard-header">
+      <div class="guard-avatar">
+        <svg viewBox="0 0 24 24"><path d="M12 2L4 5v6c0 5.25 3.5 10.15 8 11.35C16.5 21.15 20 16.25 20 11V5l-8-3z"/></svg>
+      </div>
+      <div>
+        <div class="guard-name">Guard</div>
+        <div class="guard-status">● Online · Misinformation AI</div>
+      </div>
+      <button class="guard-close" id="guardClose">✕</button>
+    </div>
+
+    <div class="guard-messages" id="guardMessages">
+      <div class="msg bot">
+        <div class="msg-bubble">Hi! I'm <strong>Guard</strong> 👋 Ask me anything about a news claim, and I'll help you spot misinformation.</div>
+      </div>
+    </div>
+
+    <!-- ── Suggested chips ──
+         Tap any chip to instantly fire that message.
+         To customise: edit the text inside each .qq-chip button,
+         or add/remove buttons — they wrap into new rows automatically. -->
+    <div class="chips-zone">
+      <div class="chips-label">SUGGESTED</div>
+      <div class="chips-row">
+        <button class="qq-chip">What is your name?</button>
+        <button class="qq-chip">What can you do?</button>
+        <button class="qq-chip">How do I reset my password?</button>
+        <button class="qq-chip">How accurate are you?</button>
+        <button class="qq-chip">Is this free to use?</button>
+      </div>
+    </div>
+
+    <div class="guard-input-row">
+      <input class="guard-input" id="guardInput" type="text" placeholder="Ask Guard anything…" autocomplete="off"/>
+      <button class="guard-send" id="guardSend">
+        <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
+      </button>
+    </div>
+
+  </div>
+
+  <script>
+    (function () {
+      const toggle = document.getElementById('guardToggle');
+      const win    = document.getElementById('guardWindow');
+      const close  = document.getElementById('guardClose');
+      const input  = document.getElementById('guardInput');
+      const send   = document.getElementById('guardSend');
+      const msgs   = document.getElementById('guardMessages');
+      const chips  = document.querySelectorAll('.qq-chip');
+
+      /* ── Open / close ── */
+      toggle.addEventListener('click', () => win.classList.toggle('open'));
+      close.addEventListener('click',  () => win.classList.remove('open'));
+
+      /* ── Add a message bubble ── */
+      function addMsg(text, role) {
+        const wrap   = document.createElement('div');
+        wrap.className = 'msg ' + role;
+        const bubble = document.createElement('div');
+        bubble.className = 'msg-bubble';
+        bubble.textContent = text;
+        wrap.appendChild(bubble);
+        msgs.appendChild(wrap);
+        msgs.scrollTop = msgs.scrollHeight;
+        return wrap;
+      }
+
+      /* ── Typing animation ── */
+      function addTyping() {
+        const wrap = document.createElement('div');
+        wrap.className = 'msg bot';
+        wrap.innerHTML = '<div class="msg-bubble typing-dots"><span></span><span></span><span></span></div>';
+        msgs.appendChild(wrap);
+        msgs.scrollTop = msgs.scrollHeight;
+        return wrap;
+      }
+
+      /* ── Lock / unlock UI ── */
+      function setLocked(locked) {
+        input.disabled = locked;
+        send.disabled  = locked;
+        chips.forEach(c => c.disabled = locked);
+      }
+
+      /* ── Send a question to the API ── */
+      async function ask(question) {
+        if (!question.trim()) return;
+        addMsg(question, 'user');
+        input.value = '';
+        setLocked(true);
+
+        const typing = addTyping();
+
+        try {
+          const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-20250514',
+              max_tokens: 1000,
+              system: "You are Guard, a friendly AI assistant embedded in TruthGuard — a misinformation detection platform. Help users understand fake news, fact-check claims, explain how misinformation spreads, and interpret analysis results. Be concise (2-4 sentences max), clear, and conversational. Never use markdown formatting.",
+              messages: [{ role: 'user', content: question }]
+            })
+          });
+
+          const data  = await res.json();
+          const reply = data?.content?.[0]?.text || "Sorry, I couldn't get a response. Please try again.";
+          typing.remove();
+          addMsg(reply, 'bot');
+        } catch (err) {
+          typing.remove();
+          addMsg("Something went wrong. Please check your connection and try again.", 'bot');
+        }
+
+        setLocked(false);
+        input.focus();
+      }
+
+      /* ── Chip: tap = instant send ── */
+      chips.forEach(btn => {
+        btn.addEventListener('click', () => ask(btn.textContent.trim()));
+      });
+
+      /* ── Manual send ── */
+      send.addEventListener('click', () => ask(input.value));
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') ask(input.value);
+      });
+    })();
+  </script>
+</body>
+</html>

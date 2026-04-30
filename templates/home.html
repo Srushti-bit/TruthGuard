@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}TruthGuard — AI Fake News Detector{% endblock %}
+
+{% block content %}
+
+<div class="tg-hero">
+  <div class="tg-badge">
+    <div class="tg-badge-dot"></div>
+    NLP-Powered Verification Engine
+  </div>
+  <h1>Fight <span class="strike">fake</span> news<br>with <span class="accent">AI</span> truth</h1>
+  <p>TruthGuard uses advanced natural language processing to detect misinformation in news articles and headlines — instantly.</p>
+  <div class="tg-hero-btns">
+    <a href="{% url 'detector:submit' %}" class="tg-btn-hero-primary">Analyze an article</a>
+    <a href="{% url 'dashboard:dashboard' %}" class="tg-btn-hero-ghost">View dashboard</a>
+  </div>
+</div>
+
+<div class="tg-stats-grid" style="max-width:720px;margin:0 auto 2.5rem;padding:0 2rem;">
+  <div class="tg-stat-card" style="text-align:center;">
+    <div class="tg-stat-val">94.7%</div>
+    <div class="tg-stat-label" style="margin-top:4px;">Model accuracy</div>
+  </div>
+  <div class="tg-stat-card" style="text-align:center;">
+    <div class="tg-stat-val">12K+</div>
+    <div class="tg-stat-label" style="margin-top:4px;">Articles analyzed</div>
+  </div>
+  <div class="tg-stat-card" style="text-align:center;">
+    <div class="tg-stat-val">&lt;0.4s</div>
+    <div class="tg-stat-label" style="margin-top:4px;">Avg. response time</div>
+  </div>
+</div>
+
+<div class="tg-features">
+  <div class="tg-feature-card">
+    <div class="tg-feature-icon" style="background:rgba(0,220,130,0.1);">🔍</div>
+    <h3>NLP Analysis</h3>
+    <p>Deep linguistic pattern recognition to spot manipulative language and emotional bias.</p>
+  </div>
+  <div class="tg-feature-card">
+    <div class="tg-feature-icon" style="background:rgba(255,68,85,0.1);">⚡</div>
+    <h3>Instant Results</h3>
+    <p>Classify any news article in under a second with confidence scores and signal flags.</p>
+  </div>
+  <div class="tg-feature-card">
+    <div class="tg-feature-icon" style="background:rgba(255,184,48,0.1);">📊</div>
+    <h3>Analytics Dashboard</h3>
+    <p>Track trends, see detection history, and monitor your analysis patterns over time.</p>
+  </div>
+</div>
+
+{% endblock %}

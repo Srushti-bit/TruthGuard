@@ -1,36 +1,123 @@
-{% extends 'base.html' %}
-{% block title %}Login{% endblock %}
-{% block content %}
-<div class="row justify-content-center mt-5">
-    <div class="col-md-5">
-        <div class="card p-4">
-            <div class="text-center mb-4">
-                <i class="fas fa-shield-alt fa-3x" style="color:#667eea;"></i>
-                <h3 class="mt-2 fw-bold">Welcome Back</h3>
-                <p class="text-muted">Login to TruthGuard</p>
-            </div>
-            <form method="post">
-                {% csrf_token %}
-                {% for field in form %}
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">{{ field.label }}</label>
-                        <input type="{{ field.field.widget.input_type }}"
-                               name="{{ field.html_name }}"
-                               class="form-control form-control-lg"
-                               placeholder="{{ field.label }}">
-                        {% if field.errors %}
-                            <div class="text-danger small">{{ field.errors }}</div>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-                <button type="submit" class="btn btn-primary w-100 btn-lg">
-                    <i class="fas fa-sign-in-alt"></i> Login
-                </button>
-            </form>
-            <p class="text-center mt-3 mb-0">
-                Don't have an account? <a href="{% url 'accounts:register' %}">Register here</a>
-            </p>
-        </div>
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TruthGuard — Sign In</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --green: #00e676; --green2: #00c853;
+      --bg: #060b0f; --card: rgba(15,20,25,0.85);
+      --border: rgba(0,230,118,0.15); --muted: rgba(200,220,205,0.45);
+      --text: #e8f0e9; --input-bg: rgba(255,255,255,0.04);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(ellipse 80% 60% at 15% 20%, rgba(0,230,118,0.10) 0%, transparent 60%),
+                  radial-gradient(ellipse 60% 50% at 85% 75%, rgba(0,180,90,0.08) 0%, transparent 55%), #060b0f;
+    }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 20px; padding: 40px; width: 100%; max-width: 420px;
+      backdrop-filter: blur(20px);
+    }
+    .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 32px; }
+    .logo-icon {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, var(--green), var(--green2));
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 20px rgba(0,230,118,0.4);
+    }
+    .logo-icon svg { width: 22px; height: 22px; fill: #060b0f; }
+    .logo-text { font-family: 'Syne', sans-serif; font-size: 1.3rem; font-weight: 700; }
+    .logo-text em { color: var(--green); font-style: normal; }
+    h1 { font-family: 'Syne', sans-serif; font-size: 1.7rem; font-weight: 800; margin-bottom: 6px; }
+    .sub { font-size: 0.88rem; color: var(--muted); margin-bottom: 32px; }
+    label {
+      display: block; font-size: 0.72rem; font-weight: 600;
+      letter-spacing: 0.1em; color: var(--muted);
+      text-transform: uppercase; margin-bottom: 8px;
+    }
+    .field { margin-bottom: 20px; }
+    input[type=text], input[type=password] {
+      width: 100%; background: var(--input-bg); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; color: var(--text); font-family: 'DM Sans', sans-serif;
+      font-size: 0.95rem; padding: 13px 16px; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus { border-color: rgba(0,230,118,0.45); box-shadow: 0 0 0 3px rgba(0,230,118,0.1); }
+    .btn {
+      width: 100%; padding: 14px; border: none; cursor: pointer;
+      border-radius: 12px; font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700;
+      color: #060b0f;
+      background: linear-gradient(135deg, var(--green) 0%, var(--green2) 100%);
+      box-shadow: 0 4px 24px rgba(0,230,118,0.35);
+      transition: transform 0.15s, filter 0.15s;
+      margin-top: 8px;
+    }
+    .btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .btn:active { transform: translateY(1px); }
+    .footer { margin-top: 24px; text-align: center; font-size: 0.85rem; color: var(--muted); }
+    .footer a { color: var(--green); text-decoration: none; font-weight: 500; }
+    .footer a:hover { text-decoration: underline; }
+    .error-box {
+      background: rgba(255,69,69,0.08); border: 1px solid rgba(255,80,80,0.35);
+      border-radius: 10px; padding: 12px 14px; margin-bottom: 20px;
+      font-size: 0.83rem; color: #ff7070;
+    }
+    .msg-box {
+      background: rgba(0,230,118,0.08); border: 1px solid rgba(0,230,118,0.25);
+      border-radius: 10px; padding: 12px 14px; margin-bottom: 20px;
+      font-size: 0.83rem; color: var(--green);
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M12 2L4 5v6c0 5.25 3.5 10.15 8 11.35C16.5 21.15 20 16.25 20 11V5l-8-3z"/></svg>
     </div>
+    <div class="logo-text">Truth <em>Guard</em></div>
+  </div>
+
+  <h1>Welcome back</h1>
+  <p class="sub">Sign in to your account to continue.</p>
+
+  {% if form.errors %}
+    <div class="error-box">Invalid username or password. Please try again.</div>
+  {% endif %}
+
+  {% for message in messages %}
+    <div class="msg-box">{{ message }}</div>
+  {% endfor %}
+
+  <form method="POST" action="{% url 'accounts:login' %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+
+    <div class="field">
+      <label for="id_username">Username</label>
+      <input type="text" name="username" id="id_username" placeholder="your_username" autocomplete="off" required>
+    </div>
+
+    <div class="field">
+      <label for="id_password">Password</label>
+      <input type="password" name="password" id="id_password" placeholder="••••••••" required>
+    </div>
+
+    <button type="submit" class="btn">Sign in</button>
+  </form>
+
+  <div class="footer">
+    Don't have an account? <a href="{% url 'accounts:register' %}">Create one &rarr;</a>
+  </div>
 </div>
-{% endblock %}
+</body>
+</html>

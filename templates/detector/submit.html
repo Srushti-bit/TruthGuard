@@ -1,31 +1,286 @@
-{% extends 'base.html' %}
-{% block title %}Analyze News{% endblock %}
-{% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card p-4">
-            <h3 class="fw-bold mb-1"><i class="fas fa-search" style="color:#667eea;"></i> Analyze News</h3>
-            <p class="text-muted mb-4">Paste news text or enter a URL to check its credibility</p>
-            <form method="post">
-                {% csrf_token %}
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">News Text</label>
-                    <textarea name="news_text" class="form-control" rows="8"
-                              placeholder="Paste the full news article text here..."></textarea>
-                    <div class="form-text">Minimum 50 characters required for accurate analysis.</div>
-                </div>
-                <div class="text-center my-3 text-muted fw-semibold">— OR —</div>
-                <div class="mb-4">
-                    <label class="form-label fw-semibold">News URL</label>
-                    <input type="url" name="source_url" class="form-control"
-                           placeholder="https://example.com/news-article">
-                    <div class="form-text">We'll extract the text automatically from the URL.</div>
-                </div>
-                <button type="submit" class="btn btn-primary btn-lg w-100">
-                    <i class="fas fa-robot"></i> Analyze with AI
-                </button>
-            </form>
-        </div>
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TruthGuard — Analyze News</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --green: #00e676; --green2: #00c853;
+      --bg: #060b0f; --card: rgba(15,20,25,0.85);
+      --border: rgba(0,230,118,0.15); --muted: rgba(200,220,205,0.45);
+      --text: #e8f0e9; --input-bg: rgba(255,255,255,0.04);
+      --real: #00e676; --fake: #f0455a; --unc: #f5a623;
+      --surface: rgba(255,255,255,0.03);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(ellipse 80% 60% at 15% 20%, rgba(0,230,118,0.10) 0%, transparent 60%),
+                  radial-gradient(ellipse 60% 50% at 85% 75%, rgba(0,180,90,0.08) 0%, transparent 55%), #060b0f;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    .shell { max-width: 780px; margin: 0 auto; padding: 40px 24px 80px; }
+
+    /* Header */
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 48px; flex-wrap: wrap; gap: 16px; }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--green), var(--green2));
+      border-radius: 9px; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 16px rgba(0,230,118,0.35);
+    }
+    .logo-icon svg { width: 18px; height: 18px; fill: #060b0f; }
+    .logo-text { font-family: 'Syne', sans-serif; font-size: 1.2rem; font-weight: 700; color: #e8f0e9; }
+    .logo-text em { color: var(--green); font-style: normal; }
+
+    nav { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    nav a {
+      color: var(--muted); text-decoration: none; font-size: 0.82rem; font-weight: 500;
+      padding: 6px 14px; border-radius: 20px; border: 1px solid transparent;
+      transition: color .15s, border-color .15s;
+    }
+    nav a:hover { color: var(--green); border-color: var(--border); }
+    nav a.logout {
+      color: var(--text); border-color: rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+    }
+    nav a.logout:hover { border-color: rgba(240,69,90,0.4); color: var(--fake); }
+
+    /* Page title */
+    .page-head { margin-bottom: 32px; }
+    h1 { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800; color: #fff; margin-bottom: 6px; }
+    .sub { font-size: 0.88rem; color: var(--muted); }
+
+    /* Cards */
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 20px; padding: 32px;
+      backdrop-filter: blur(20px); margin-bottom: 20px;
+    }
+
+    /* Form */
+    label {
+      display: block; font-size: 0.72rem; font-weight: 600;
+      letter-spacing: 0.1em; color: var(--muted);
+      text-transform: uppercase; margin-bottom: 8px;
+    }
+    textarea, input[type=url] {
+      width: 100%; background: var(--input-bg);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; color: var(--text);
+      font-family: 'DM Sans', sans-serif; font-size: 0.95rem;
+      padding: 13px 16px; outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    textarea { resize: vertical; min-height: 150px; }
+    textarea:focus, input[type=url]:focus {
+      border-color: rgba(0,230,118,0.45);
+      box-shadow: 0 0 0 3px rgba(0,230,118,0.1);
+    }
+
+    .field { margin-bottom: 20px; }
+
+    .btn {
+      width: 100%; padding: 14px; border: none; cursor: pointer;
+      border-radius: 12px; font-family: 'Syne', sans-serif;
+      font-size: 1rem; font-weight: 700; color: #060b0f;
+      background: linear-gradient(135deg, var(--green) 0%, var(--green2) 100%);
+      box-shadow: 0 4px 24px rgba(0,230,118,0.35);
+      transition: transform .15s, filter .15s; margin-top: 8px;
+    }
+    .btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .btn:active { transform: translateY(1px); }
+    .btn:disabled { background: rgba(255,255,255,0.1); color: var(--muted); box-shadow: none; cursor: not-allowed; }
+
+    /* Error */
+    .error-box {
+      background: rgba(240,69,90,0.08); border: 1px solid rgba(240,69,90,0.3);
+      border-radius: 12px; padding: 14px 18px; color: var(--fake);
+      font-size: 0.85rem; margin-bottom: 20px;
+    }
+
+    /* Result */
+    .result-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 20px; overflow: hidden; margin-bottom: 20px;
+      backdrop-filter: blur(20px);
+      animation: fadeUp .4s ease;
+    }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+
+    .result-banner { padding: 28px 32px; display: flex; align-items: center; gap: 18px; }
+    .result-banner.REAL      { background: rgba(0,230,118,0.07); border-bottom: 1px solid rgba(0,230,118,0.2); }
+    .result-banner.FAKE      { background: rgba(240,69,90,0.07); border-bottom: 1px solid rgba(240,69,90,0.2); }
+    .result-banner.UNCERTAIN { background: rgba(245,166,35,0.07); border-bottom: 1px solid rgba(245,166,35,0.2); }
+
+    .verdict-icon {
+      width: 52px; height: 52px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Syne', sans-serif; font-size: 1.4rem; font-weight: 800;
+      flex-shrink: 0;
+    }
+    .REAL .verdict-icon      { background: rgba(0,230,118,0.15); color: var(--real); }
+    .FAKE .verdict-icon      { background: rgba(240,69,90,0.15); color: var(--fake); }
+    .UNCERTAIN .verdict-icon { background: rgba(245,166,35,0.15); color: var(--unc); }
+
+    .verdict-label { font-family: 'Syne', sans-serif; font-size: 1.8rem; font-weight: 800; }
+    .REAL .verdict-label      { color: var(--real); }
+    .FAKE .verdict-label      { color: var(--fake); }
+    .UNCERTAIN .verdict-label { color: var(--unc); }
+    .verdict-date { font-size: 0.8rem; color: var(--muted); margin-top: 3px; }
+
+    .result-body { padding: 28px 32px; }
+
+    .metrics-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px; margin-bottom: 24px;
+    }
+    .metric {
+      background: var(--surface); border: 1px solid rgba(0,230,118,0.1);
+      border-radius: 12px; padding: 16px;
+    }
+    .metric-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+    .metric-value { font-family: 'Syne', sans-serif; font-size: 1.6rem; font-weight: 800; color: #fff; }
+
+    .bar-row { margin-bottom: 12px; }
+    .bar-label { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--muted); margin-bottom: 5px; font-weight: 500; }
+    .bar-track { height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 3px; transition: width 1s ease; }
+
+    .explanation {
+      font-size: 0.9rem; color: var(--text); line-height: 1.75;
+      padding-top: 20px; border-top: 1px solid rgba(0,230,118,0.12); margin-top: 20px;
+    }
+    .explanation strong {
+      color: var(--muted); font-size: 0.68rem; text-transform: uppercase;
+      letter-spacing: 0.1em; display: block; margin-bottom: 8px; font-weight: 600;
+    }
+
+    .actions { display: flex; gap: 10px; margin-top: 24px; }
+    .btn-outline {
+      flex: 1; padding: 11px; background: var(--input-bg);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; color: var(--text);
+      font-family: 'DM Sans', sans-serif; font-size: 0.85rem; font-weight: 500;
+      cursor: pointer; text-align: center; text-decoration: none;
+      transition: border-color .15s, background .15s;
+    }
+    .btn-outline:hover { border-color: rgba(0,230,118,0.35); background: rgba(0,230,118,0.05); color: var(--green); }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 2L4 5v6c0 5.25 3.5 10.15 8 11.35C16.5 21.15 20 16.25 20 11V5l-8-3z"/></svg>
+      </div>
+      <div class="logo-text">Truth <em>Guard</em></div>
     </div>
+    <nav>
+      <a href="{% url 'detector:submit' %}">Analyze</a>
+      <a href="{% url 'detector:history' %}">History</a>
+      {% if request.user.is_staff %}<a href="{% url 'dashboard:admin_dashboard' %}">Dashboard</a>{% endif %}
+      <a href="{% url 'accounts:logout' %}" class="logout">Logout</a>
+    </nav>
+  </header>
+
+  <div class="page-head">
+    <h1>Analyze News</h1>
+    <p class="sub">Paste a headline or article. Our hybrid BERT + GCN model will assess it for misinformation signals.</p>
+  </div>
+
+  {% if error %}
+  <div class="error-box">⚠ {{ error }}</div>
+  {% endif %}
+
+  {% if result %}
+  {% with s=result.submission %}
+  <div class="result-card">
+    <div class="result-banner {{ s.prediction }}">
+      <div class="verdict-icon">
+        {% if s.prediction == 'REAL' %}✔{% elif s.prediction == 'FAKE' %}✘{% else %}?{% endif %}
+      </div>
+      <div>
+        <div class="verdict-label">{{ s.prediction }}</div>
+        <div class="verdict-date">Analysis complete · {{ s.submitted_at|date:"M d, Y H:i" }}</div>
+      </div>
+    </div>
+    <div class="result-body">
+      <div class="metrics-grid">
+        <div class="metric">
+          <div class="metric-label">Confidence</div>
+          <div class="metric-value">{{ s.confidence_score|floatformat:0 }}%</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Uncertainty</div>
+          <div class="metric-value">{{ s.uncertainty_score|floatformat:0 }}%</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Shares Analyzed</div>
+          <div class="metric-value">{{ s.shares_analyzed }}</div>
+        </div>
+      </div>
+
+      <div class="bar-row">
+        <div class="bar-label"><span>BERT Semantic</span><span>{{ s.bert_semantic_score|floatformat:2 }}</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:{% widthratio s.bert_semantic_score 1 100 %}%;background:var(--green);"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>GCN Propagation Risk</span><span>{{ s.gcn_propagation_score|floatformat:2 }}</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:{% widthratio s.gcn_propagation_score 1 100 %}%;background:var(--fake);"></div></div>
+      </div>
+
+      {% if result.explanation %}
+      <div class="explanation">
+        <strong>AI Explanation</strong>
+        {{ result.explanation }}
+      </div>
+      {% endif %}
+
+      <div class="actions">
+        <a href="{% url 'detector:submit' %}" class="btn-outline">Analyze Another</a>
+        <a href="{% url 'detector:history' %}" class="btn-outline">View History</a>
+      </div>
+    </div>
+  </div>
+  {% endwith %}
+  {% endif %}
+
+  <div class="card">
+    <form method="POST">
+      {% csrf_token %}
+      <div class="field">
+        <label for="news_text">News Text / Headline</label>
+        <textarea id="news_text" name="news_text" placeholder="Paste a news article, headline, or claim here…" required>{{ request.POST.news_text }}</textarea>
+      </div>
+      <div class="field">
+        <label for="source_url">Source URL <span style="color:var(--muted);font-size:0.68rem;">(optional)</span></label>
+        <input type="url" id="source_url" name="source_url" placeholder="https://example.com/article" value="{{ request.POST.source_url }}">
+      </div>
+      <button type="submit" class="btn" id="submit-btn">Analyze with AI →</button>
+    </form>
+  </div>
+
 </div>
-{% endblock %}
+
+<script>
+  document.querySelector('form').addEventListener('submit', function() {
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Analyzing…';
+  });
+</script>
+
+{% include 'partials/chatbot_widget.html' %}
+</body>
+</html>

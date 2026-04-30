@@ -1,105 +1,609 @@
-{% extends 'base.html' %}
-{% block title %}Admin Dashboard{% endblock %}
-{% block content %}
-<h4 class="fw-bold mb-4"><i class="fas fa-chart-line" style="color:#667eea;"></i> Admin Dashboard</h4>
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TruthGuard — Admin Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
 
-<div class="row g-4 mb-4">
-    <div class="col-md-3">
-        <div class="card p-3 text-center border-start border-primary border-4">
-            <h2 class="fw-bold text-primary">{{ total_submissions }}</h2>
-            <p class="text-muted mb-0">Total Submissions</p>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card p-3 text-center border-start border-success border-4">
-            <h2 class="fw-bold text-success">{{ real_count }}</h2>
-            <p class="text-muted mb-0">Real News</p>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card p-3 text-center border-start border-danger border-4">
-            <h2 class="fw-bold text-danger">{{ fake_count }}</h2>
-            <p class="text-muted mb-0">Fake News</p>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card p-3 text-center border-start border-warning border-4">
-            <h2 class="fw-bold text-warning">{{ total_users }}</h2>
-            <p class="text-muted mb-0">Total Users</p>
-        </div>
-    </div>
-</div>
+  <style>
+    :root {
+      --bg:        #0b0d10;
+      --surface:   #13161c;
+      --border:    #1f242e;
+      --muted:     #3a4150;
+      --text:      #d4dbe8;
+      --dim:       #707b8e;
+      --real:      #22c97a;
+      --fake:      #f0455a;
+      --uncertain: #f5a623;
+      --accent:    #4d9eff;
+      --accent2:   #9b6dff;
+      --mono:      'DM Mono', monospace;
+      --display:   'Syne', sans-serif;
+    }
 
-<div class="row g-4 mb-4">
-    <div class="col-md-5">
-        <div class="card p-4">
-            <h6 class="fw-bold mb-3">Fake vs Real Distribution</h6>
-            <canvas id="pieChart" height="200"></canvas>
-        </div>
-    </div>
-    <div class="col-md-7">
-        <div class="card p-4">
-            <h6 class="fw-bold mb-3">Top Users by Submissions</h6>
-            <div class="table-responsive">
-                <table class="table table-sm">
-                    <thead><tr><th>Username</th><th>Submissions</th></tr></thead>
-                    <tbody>
-                        {% for u in top_users %}
-                        <tr><td>{{ u.user__username }}</td><td>{{ u.count }}</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-<div class="card p-4">
-    <h6 class="fw-bold mb-3">Recent Submissions (Last 50)</h6>
-    <div class="table-responsive">
-        <table class="table table-hover table-sm">
-            <thead class="table-dark">
-                <tr><th>User</th><th>Date</th><th>Preview</th><th>Verdict</th><th>Confidence</th></tr>
-            </thead>
-            <tbody>
-                {% for sub in all_submissions %}
-                <tr>
-                    <td>{{ sub.user.username }}</td>
-                    <td>{{ sub.submitted_at|date:"d M Y" }}</td>
-                    <td>{{ sub.news_text|truncatechars:60 }}</td>
-                    <td>
-                        {% if sub.prediction == 'REAL' %}
-                            <span class="badge bg-success">REAL</span>
-                        {% else %}
-                            <span class="badge bg-danger">FAKE</span>
-                        {% endif %}
-                    </td>
-                    <td>{{ sub.confidence_score }}%</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endblock %}
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
 
-{% block extra_js %}
+    /* ── Noise overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Layout ── */
+    .shell {
+      position: relative;
+      z-index: 1;
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 32px 24px 64px;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
+      margin-bottom: 36px;
+    }
+    .logo {
+      font-family: var(--display);
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: #fff;
+    }
+    .logo span { color: var(--accent); }
+    .header-meta {
+      font-size: 11px;
+      color: var(--dim);
+      text-align: right;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 2px;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .badge-admin { background: var(--border); color: var(--accent); border: 1px solid var(--muted); }
+
+    /* ── Section label ── */
+    .section-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--dim);
+      margin-bottom: 14px;
+    }
+
+    /* ── Stat cards ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin-bottom: 36px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 18px 20px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color .2s;
+    }
+    .stat-card:hover { border-color: var(--muted); }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+    }
+    .stat-card.total::before  { background: var(--accent); }
+    .stat-card.users::before  { background: var(--accent2); }
+    .stat-card.real::before   { background: var(--real); }
+    .stat-card.fake::before   { background: var(--fake); }
+    .stat-card.recent::before { background: var(--uncertain); }
+
+    .stat-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--dim);
+      margin-bottom: 10px;
+    }
+    .stat-value {
+      font-family: var(--display);
+      font-size: 38px;
+      font-weight: 700;
+      line-height: 1;
+      color: #fff;
+    }
+    .stat-sub {
+      font-size: 11px;
+      color: var(--dim);
+      margin-top: 6px;
+    }
+    .stat-sub strong { color: var(--text); }
+
+    /* ── Charts row ── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 12px;
+      margin-bottom: 36px;
+    }
+    @media (max-width: 860px) {
+      .charts-row { grid-template-columns: 1fr; }
+    }
+
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 24px;
+    }
+    .chart-title {
+      font-family: var(--display);
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .chart-sub {
+      font-size: 11px;
+      color: var(--dim);
+      margin-bottom: 20px;
+    }
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+    }
+    .chart-wrap.line  { height: 220px; }
+    .chart-wrap.donut { height: 220px; }
+
+    /* Doughnut legend */
+    .donut-legend {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 18px;
+    }
+    .legend-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .legend-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+    .legend-label { display: flex; align-items: center; color: var(--text); }
+    .legend-val   { color: var(--dim); font-variant-numeric: tabular-nums; }
+
+    /* ── Table ── */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 36px;
+    }
+    .table-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .table-header .chart-title { margin-bottom: 0; }
+    .count-pill {
+      font-size: 11px;
+      color: var(--dim);
+      background: var(--border);
+      border-radius: 2px;
+      padding: 2px 8px;
+    }
+
+    .tbl-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    thead th {
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--dim);
+      padding: 10px 20px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background .15s;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,.025); }
+    td {
+      padding: 11px 20px;
+      color: var(--text);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    td.user { color: var(--accent); }
+    td.url  { color: var(--dim); max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 2px;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .pill-real      { background: rgba(34,201,122,.12); color: var(--real);      border: 1px solid rgba(34,201,122,.3); }
+    .pill-fake      { background: rgba(240,69, 90,.12); color: var(--fake);      border: 1px solid rgba(240,69, 90,.3); }
+    .pill-uncertain { background: rgba(245,166,35,.12); color: var(--uncertain); border: 1px solid rgba(245,166,35,.3); }
+
+    .conf-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .conf-track {
+      flex: 1;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .conf-fill { height: 100%; border-radius: 2px; }
+
+    /* ── Top users ── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
+
+    .user-list { list-style: none; }
+    .user-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .user-list li:last-child { border-bottom: none; }
+    .user-rank {
+      color: var(--muted);
+      font-size: 10px;
+      width: 20px;
+    }
+    .user-name { color: var(--accent); margin-left: 10px; flex: 1; }
+    .user-count {
+      background: var(--border);
+      color: var(--dim);
+      border-radius: 2px;
+      padding: 1px 8px;
+      font-size: 11px;
+    }
+
+    /* Animate rows in */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .stat-card  { animation: fadeUp .4s ease both; }
+    .chart-card { animation: fadeUp .5s ease both; }
+    .table-card { animation: fadeUp .55s ease both; }
+    .stat-card:nth-child(2) { animation-delay: .05s; }
+    .stat-card:nth-child(3) { animation-delay: .10s; }
+    .stat-card:nth-child(4) { animation-delay: .15s; }
+    .stat-card:nth-child(5) { animation-delay: .20s; }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Header -->
+  <header>
+    <div>
+      <div class="logo">Truth<span>Guard</span></div>
+      <div style="font-size:11px;color:var(--dim);margin-top:4px;">Misinformation Intelligence Platform</div>
+    </div>
+    <div class="header-meta">
+      <span class="badge badge-admin">Admin</span><br>
+      <span style="margin-top:4px;display:block;">{{ request.user.username }}</span>
+    </div>
+  </header>
+
+  <!-- Stat Cards -->
+  <p class="section-label">Overview</p>
+  <div class="stats-grid">
+    <div class="stat-card total">
+      <div class="stat-label">Total Submissions</div>
+      <div class="stat-value">{{ total_submissions }}</div>
+      <div class="stat-sub"><strong>{{ recent_submissions }}</strong> in last 7 days</div>
+    </div>
+    <div class="stat-card users">
+      <div class="stat-label">Registered Users</div>
+      <div class="stat-value">{{ total_users }}</div>
+      <div class="stat-sub">active analysts</div>
+    </div>
+    <div class="stat-card real">
+      <div class="stat-label">Real News</div>
+      <div class="stat-value">{{ real_count }}</div>
+      <div class="stat-sub"><strong>{{ real_percentage }}%</strong> of all</div>
+    </div>
+    <div class="stat-card fake">
+      <div class="stat-label">Fake News</div>
+      <div class="stat-value">{{ fake_count }}</div>
+      <div class="stat-sub"><strong>{{ fake_percentage }}%</strong> of all</div>
+    </div>
+    <div class="stat-card recent">
+      <div class="stat-label">Uncertain</div>
+      <div class="stat-value">{{ uncertain_count }}</div>
+      <div class="stat-sub">flagged for review</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <p class="section-label">Analytics</p>
+  <div class="charts-row">
+    <!-- Line chart -->
+    <div class="chart-card">
+      <div class="chart-title">Submission Volume</div>
+      <div class="chart-sub">Daily count — last 7 days</div>
+      <div class="chart-wrap line">
+        <canvas id="lineChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Doughnut chart -->
+    <div class="chart-card">
+      <div class="chart-title">Prediction Breakdown</div>
+      <div class="chart-sub">All-time distribution</div>
+      <div class="chart-wrap donut">
+        <canvas id="donutChart"></canvas>
+      </div>
+      <div class="donut-legend">
+        <div class="legend-row">
+          <span class="legend-label"><span class="legend-dot" style="background:var(--real)"></span>Real</span>
+          <span class="legend-val">{{ real_count }} &nbsp;({{ real_percentage }}%)</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-label"><span class="legend-dot" style="background:var(--fake)"></span>Fake</span>
+          <span class="legend-val">{{ fake_count }} &nbsp;({{ fake_percentage }}%)</span>
+        </div>
+        <div class="legend-row">
+          <span class="legend-label"><span class="legend-dot" style="background:var(--uncertain)"></span>Uncertain</span>
+          <span class="legend-val">{{ uncertain_count }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Submissions Table + Top Users -->
+  <div class="two-col" style="margin-bottom:12px;">
+
+    <!-- Top Users -->
+    <div>
+      <p class="section-label">Top Analysts</p>
+      <div class="table-card">
+        <div class="table-header">
+          <span class="chart-title">Leaderboard</span>
+          <span class="count-pill">Top 10</span>
+        </div>
+        <ul class="user-list">
+          {% for u in top_users %}
+          <li>
+            <span class="user-rank">#{{ forloop.counter }}</span>
+            <span class="user-name">{{ u.user__username }}</span>
+            <span class="user-count">{{ u.count }}</span>
+          </li>
+          {% empty %}
+          <li style="color:var(--dim);">No data yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <!-- Placeholder for future widget -->
+    <div>
+      <p class="section-label">Detection Accuracy</p>
+      <div class="table-card" style="padding:24px;height:calc(100% - 28px);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;">
+        <div style="font-size:42px;font-family:var(--display);font-weight:700;color:var(--accent);">
+          {% if total_submissions > 0 %}{{ real_percentage }}%{% else %}—{% endif %}
+        </div>
+        <div style="font-size:11px;color:var(--dim);text-align:center;">
+          verified real out of all submissions
+        </div>
+        <div style="width:100%;height:3px;background:var(--border);border-radius:2px;margin-top:12px;overflow:hidden;">
+          <div style="height:100%;width:{{ real_percentage }}%;background:linear-gradient(90deg,var(--accent),var(--real));border-radius:2px;transition:width 1s ease;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Submissions Table -->
+  <p class="section-label">Recent Submissions</p>
+  <div class="table-card">
+    <div class="table-header">
+      <span class="chart-title">Submission Log</span>
+      <span class="count-pill">Latest 50</span>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Prediction</th>
+            <th>Confidence</th>
+            <th>Uncertainty</th>
+            <th>Shares</th>
+            <th>Source URL</th>
+            <th>Submitted</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sub in all_submissions %}
+          <tr>
+            <td class="user">{{ sub.user.username }}</td>
+            <td>
+              {% if sub.prediction == 'REAL' %}
+                <span class="pill pill-real">Real</span>
+              {% elif sub.prediction == 'FAKE' %}
+                <span class="pill pill-fake">Fake</span>
+              {% else %}
+                <span class="pill pill-uncertain">Uncertain</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="conf-bar">
+                <div class="conf-track">
+                  <div class="conf-fill" style="
+                    width:{{ sub.confidence_score|floatformat:0 }}%;
+                    background:{% if sub.prediction == 'REAL' %}var(--real){% elif sub.prediction == 'FAKE' %}var(--fake){% else %}var(--uncertain){% endif %};
+                  "></div>
+                </div>
+                <span style="color:var(--dim);font-size:11px;min-width:36px;">{{ sub.confidence_score|floatformat:2 }}</span>
+              </div>
+            </td>
+            <td style="color:var(--dim);">{{ sub.uncertainty_score|floatformat:3 }}</td>
+            <td style="color:var(--dim);">{{ sub.shares_analyzed }}</td>
+            <td class="url">
+              {% if sub.source_url %}
+                <a href="{{ sub.source_url }}" target="_blank" style="color:var(--dim);text-decoration:none;">{{ sub.source_url|truncatechars:40 }}</a>
+              {% else %}—{% endif %}
+            </td>
+            <td style="color:var(--dim);">{{ sub.submitted_at|date:"M d, H:i" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" style="color:var(--dim);padding:24px 20px;">No submissions yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /shell -->
+
 <script>
-const ctx = document.getElementById('pieChart').getContext('2d');
-new Chart(ctx, {
-    type: 'doughnut',
+  const chartLabels   = {{ chart_labels|safe }};
+  const chartData     = {{ chart_data|safe }};
+  const donutLabels   = {{ doughnut_labels|safe }};
+  const donutData     = {{ doughnut_data|safe }};
+
+  // Shared grid style
+  const gridColor = 'rgba(255,255,255,0.04)';
+  const tickColor = '#707b8e';
+
+  // ── Line Chart ──
+  const lineCtx = document.getElementById('lineChart').getContext('2d');
+
+  const lineGradient = lineCtx.createLinearGradient(0, 0, 0, 220);
+  lineGradient.addColorStop(0,   'rgba(77,158,255,0.25)');
+  lineGradient.addColorStop(1,   'rgba(77,158,255,0)');
+
+  new Chart(lineCtx, {
+    type: 'line',
     data: {
-        labels: ['Real News', 'Fake News'],
-        datasets: [{
-            data: [{{ real_count }}, {{ fake_count }}],
-            backgroundColor: ['#2ed573', '#ff4757'],
-            borderWidth: 0,
-        }]
+      labels: chartLabels,
+      datasets: [{
+        data: chartData,
+        borderColor: '#4d9eff',
+        borderWidth: 2,
+        pointBackgroundColor: '#4d9eff',
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        fill: true,
+        backgroundColor: lineGradient,
+        tension: 0.4,
+      }]
     },
     options: {
-        responsive: true,
-        plugins: { legend: { position: 'bottom' } }
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: {
+        backgroundColor: '#13161c',
+        borderColor: '#1f242e',
+        borderWidth: 1,
+        titleColor: '#d4dbe8',
+        bodyColor: '#707b8e',
+        padding: 10,
+        callbacks: {
+          label: ctx => ` ${ctx.parsed.y} submission${ctx.parsed.y !== 1 ? 's' : ''}`
+        }
+      }},
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { family: "'DM Mono'", size: 11 } } },
+        y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { family: "'DM Mono'", size: 11 }, stepSize: 1 }, beginAtZero: true }
+      }
     }
-});
+  });
+
+  // ── Doughnut Chart ──
+  const donutCtx = document.getElementById('donutChart').getContext('2d');
+  new Chart(donutCtx, {
+    type: 'doughnut',
+    data: {
+      labels: donutLabels,
+      datasets: [{
+        data: donutData,
+        backgroundColor: ['#22c97a', '#f0455a', '#f5a623'],
+        borderColor: '#13161c',
+        borderWidth: 3,
+        hoverOffset: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '72%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#13161c',
+          borderColor: '#1f242e',
+          borderWidth: 1,
+          titleColor: '#d4dbe8',
+          bodyColor: '#707b8e',
+          padding: 10,
+        }
+      }
+    }
+  });
 </script>
-{% endblock %}
+</body>
+</html>
