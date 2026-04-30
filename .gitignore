@@ -5,3 +5,7 @@
 "*.h5" 
 "*.pt" 
 "*.bin" 
+venv/ 
+ml_model/*.csv 
+ml_model/*.pth 
+*.sqlite3 
