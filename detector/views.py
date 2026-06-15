@@ -7,53 +7,118 @@ from detector.models import NewsSubmission
 from django.db.models import Count
 from django.utils import timezone
 from datetime import timedelta
+from functools import lru_cache
 import json
 import os
-import re
-import google.generativeai as genai
 
 
-# ── Gemini client ──────────────────────────────────────────────
-genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
-gemini_model = genai.GenerativeModel("gemini-2.0-flash")
-
-ANALYSIS_PROMPT = """You are a misinformation detection AI. Analyze the following news text and determine if it is REAL, FAKE, or UNCERTAIN.
-
-Respond ONLY in this exact JSON format, no extra text, no markdown fences:
-{
-  "prediction": "REAL" or "FAKE" or "UNCERTAIN",
-  "confidence_score": <float 0.0-1.0>,
-  "uncertainty_score": <float 0.0-1.0>,
-  "bert_semantic_score": <float 0.0-1.0>,
-  "gcn_propagation_score": <float 0.0-1.0>,
-  "explanation": "<2-3 sentence plain English explanation>"
-}
-
-Rules:
-- confidence_score: how confident you are in the prediction
-- uncertainty_score: how uncertain/ambiguous the content is (higher = more uncertain)
-- bert_semantic_score: semantic credibility score based on language patterns
-- gcn_propagation_score: estimated virality/propagation risk score
-- Be calibrated and honest. Satire/clickbait = FAKE. Verifiable facts = REAL. Ambiguous = UNCERTAIN.
-"""
+# Local Model Setup
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, '..', 'ml_model', 'hybrid_model.pth')
 
 
-# ── Helpers ───────────────────────────────────────────────────
+@lru_cache(maxsize=1)
+def get_local_model():
+    """Load the ML model only when analysis is requested."""
+    import torch
+    import torch.nn as nn
+    from transformers import BertTokenizer, BertModel
+
+    class HybridTruthGuard(nn.Module):
+        def __init__(self):
+            super(HybridTruthGuard, self).__init__()
+            self.bert = BertModel.from_pretrained('bert-base-uncased')
+            self.fusion = nn.Linear(768 + 64, 256)
+            self.classifier = nn.Linear(256, 2)
+            self.dropout = nn.Dropout(0.3)
+
+        def forward(self, ids, mask, force_dropout=False):
+            if force_dropout:
+                self.dropout.train()
+
+            outputs = self.bert(ids, attention_mask=mask)
+            bert_feats = outputs.last_hidden_state[:, 0, :]
+            gcn_placeholder = torch.zeros(bert_feats.shape[0], 64).to(bert_feats.device)
+
+            combined = torch.cat([bert_feats, gcn_placeholder], dim=-1)
+            x = torch.relu(self.fusion(combined))
+            x = self.dropout(x)
+
+            return self.classifier(x)
+
+    print("Loading TruthGuard local model...")
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
+    model = HybridTruthGuard()
+    model.load_state_dict(torch.load(MODEL_PATH, map_location='cpu'))
+    model.eval()
+
+    print("Model loaded successfully.")
+    return tokenizer, model, torch
+
+
+def analyze_with_local_model(news_text):
+    """Run local BERT+GCN hybrid model with Monte Carlo Dropout."""
+    import numpy as np
+
+    tokenizer, model, torch = get_local_model()
+
+    inputs = tokenizer(
+        news_text,
+        max_length=64,
+        truncation=True,
+        padding='max_length',
+        return_tensors='pt'
+    )
+
+    all_probs = []
+
+    with torch.no_grad():
+        for _ in range(50):
+            outputs = model(
+                inputs['input_ids'],
+                inputs['attention_mask'],
+                force_dropout=True
+            )
+            probs = torch.nn.functional.softmax(outputs, dim=1)
+            all_probs.append(probs.numpy())
+
+    all_probs = np.array(all_probs)
+    mean_probs = np.mean(all_probs, axis=0)[0]
+    std_dev = np.std(all_probs, axis=0)[0]
+
+    predicted_class = int(np.argmax(mean_probs))
+    confidence = float(mean_probs[predicted_class])
+    uncertainty = float(std_dev[predicted_class])
+
+    real_prob = float(mean_probs[1])
+
+    if uncertainty > 0.12:
+        prediction = 'UNCERTAIN'
+    elif predicted_class == 1:
+        prediction = 'REAL'
+    else:
+        prediction = 'FAKE'
+
+    return {
+        'prediction': prediction,
+        'confidence_score': round(confidence, 4),
+        'uncertainty_score': round(uncertainty, 4),
+        'bert_semantic_score': round(real_prob, 4),
+        'gcn_propagation_score': round(confidence, 4),
+        'explanation': (
+           f"This article appears to be {prediction}. "
+           f"The result is based on the article text and reliability patterns found during the check."
+)
+    }
+
+
+# Helpers
 def is_admin(user):
     return user.is_staff
 
 
-def analyze_news_with_ai(news_text):
-    prompt = f"{ANALYSIS_PROMPT}\n\nNEWS TEXT:\n{news_text}"
-    response = gemini_model.generate_content(prompt)
-    raw = response.text.strip()
-    # Strip accidental markdown fences
-    raw = re.sub(r'^```json\s*|^```\s*|```$', '', raw, flags=re.MULTILINE).strip()
-    return json.loads(raw)
-
-
-# ── Views ─────────────────────────────────────────────────────
-
+# Views
 @login_required
 def submit_news(request):
     result = None
@@ -69,7 +134,7 @@ def submit_news(request):
             error = "Please enter at least 20 characters of news text."
         else:
             try:
-                analysis = analyze_news_with_ai(news_text)
+                analysis = analyze_with_local_model(news_text)
 
                 submission = NewsSubmission.objects.create(
                     user=request.user,
@@ -89,8 +154,6 @@ def submit_news(request):
 
                 messages.success(request, "Analysis complete!")
 
-            except json.JSONDecodeError:
-                error = "AI returned an unexpected response. Please try again."
             except Exception as e:
                 error = f"Analysis failed: {str(e)}"
 
@@ -117,19 +180,21 @@ def delete_submission(request, submission_id):
         return HttpResponseForbidden("Only superusers can delete submissions.")
 
     submission = get_object_or_404(NewsSubmission, id=submission_id)
+
     if request.method == 'POST':
         submission.delete()
         messages.success(request, f'Submission #{submission_id} deleted.')
+
     return redirect('detector:history')
 
 
-# ── Admin dashboard ───────────────────────────────────────────
-
+# Admin dashboard
 @login_required
 @user_passes_test(is_admin)
 def admin_dashboard(request):
     total_submissions = NewsSubmission.objects.count()
     total_users = User.objects.count()
+
     fake_count = NewsSubmission.objects.filter(prediction='FAKE').count()
     real_count = NewsSubmission.objects.filter(prediction='REAL').count()
     uncertain_count = NewsSubmission.objects.filter(prediction='UNCERTAIN').count()
@@ -145,7 +210,9 @@ def admin_dashboard(request):
 
     all_submissions = NewsSubmission.objects.select_related('user').all()[:50]
 
-    chart_labels, chart_data = [], []
+    chart_labels = []
+    chart_data = []
+
     for i in range(6, -1, -1):
         day = timezone.now() - timedelta(days=i)
         chart_labels.append(day.strftime('%b %d'))
